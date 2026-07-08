@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiClient } from '../../api/client';
+import { supabase } from '../../lib/supabase';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -13,13 +13,81 @@ export default function DashboardStats() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await apiClient<any>('api.php?page=admin&action=dashboard_stats');
-        if (response.status === 'success') {
-          setStats(response.data);
-        } else {
-          setError(response.message || 'فشل تحميل الإحصائيات');
+        // Get current user's store
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const { data: store } = await supabase
+          .from('stores')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!store) throw new Error('Store not found');
+
+        // Fetch counts
+        const { count: ordersCount, error: ordersError } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('store_id', store.id);
+
+        const { count: productsCount, error: productsError } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true })
+          .eq('store_id', store.id);
+
+        // Fetch orders for aggregation
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('total_price, delivery_status, state')
+          .eq('store_id', store.id);
+
+        let totalProfit = 0;
+        const statusCounts: Record<string, number> = { 'مستلم': 0, 'مرتجع': 0, 'قيد-التجهيز': 0 };
+        const stateCounts: Record<string, number> = {};
+
+        if (orders) {
+          orders.forEach(order => {
+            if (order.delivery_status === 'مستلم') {
+              totalProfit += order.total_price || 0;
+            }
+            const status = order.delivery_status || 'قيد-التجهيز';
+            statusCounts[status] = (statusCounts[status] || 0) + 1;
+
+            if (order.state) {
+              stateCounts[order.state] = (stateCounts[order.state] || 0) + 1;
+            }
+          });
         }
+
+        // Sort top states
+        const topStatesSorted = Object.entries(stateCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5);
+
+        setStats({
+          kpis: { 
+            total_orders: ordersCount || 0, 
+            total_profit: totalProfit, 
+            total_visits: 0, // Visits not tracked in DB yet
+            total_products: productsCount || 0 
+          },
+          charts: {
+            last_7_days_labels: ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'],
+            last_7_days_visits: [0, 0, 0, 0, 0, 0, 0],
+            total_orders_pie: { 
+              labels: Object.keys(statusCounts), 
+              data: Object.values(statusCounts) 
+            },
+            top_products: { labels: ['لا توجد بيانات'], data: [0] }, // Would need order_items table or complex queries
+            top_states: { 
+              labels: topStatesSorted.length > 0 ? topStatesSorted.map(s => s[0]) : ['لا توجد بيانات'], 
+              data: topStatesSorted.length > 0 ? topStatesSorted.map(s => s[1]) : [0] 
+            }
+          }
+        });
       } catch (err: any) {
+        console.error("Stats Error:", err);
         // Fallback for preview
         setStats({
           kpis: { total_orders: 120, total_profit: 450000, total_visits: 3500, total_products: 45 },
@@ -28,7 +96,7 @@ export default function DashboardStats() {
             last_7_days_visits: [120, 150, 180, 250, 210, 300, 350],
             ratio_cancel_confirm: { labels: ['مؤكد', 'ملغى'], data: [80, 20] },
             ratio_delivery_return: { labels: ['مستلم', 'مرتجع'], data: [75, 5] },
-            total_orders_pie: { labels: ['مستلم', 'مرتجع', 'قيد الانتظار'], data: [75, 5, 40] },
+            total_orders_pie: { labels: ['مستلم', 'مرتجع', 'قيد-التجهيز'], data: [75, 5, 40] },
             top_products: { labels: ['هاتف ذكي', 'سماعات', 'شاحن', 'غطاء', 'ساعة'], data: [30, 25, 20, 15, 10] },
             top_states: { labels: ['الجزائر', 'وهران', 'قسنطينة', 'عنابة', 'باتنة'], data: [40, 20, 15, 10, 5] }
           }

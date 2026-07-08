@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { apiClient } from '../api/client';
+import { supabase } from '../lib/supabase';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -35,17 +35,92 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      const response = await apiClient<any>('api.php?page=register', {
-        method: 'POST',
-        body: JSON.stringify(formData)
+      // 1. Check if email already exists
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', formData.email)
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new Error('البريد الإلكتروني مسجل بالفعل.');
+      }
+
+      // 2. Check if store_slug already exists
+      const { data: existingStore } = await supabase
+        .from('stores')
+        .select('id')
+        .eq('store_slug', formData.store_slug)
+        .maybeSingle();
+        
+      if (existingStore) {
+        throw new Error('رابط المتجر هذا مستخدم بالفعل، يرجى اختيار رابط آخر.');
+      }
+
+      // 3. Register user with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.full_name,
+          }
+        }
       });
 
-      if (response.status === 'success') {
-        navigate('/admin/dashboard');
-      } else {
-        setError(response.message || 'حدث خطأ أثناء التسجيل');
+      if (authError) throw authError;
+      
+      const userId = authData.user?.id;
+      if (!userId) throw new Error('فشل إنشاء الحساب');
+
+      // 4. Insert into users table
+      const { error: userError } = await supabase
+        .from('users')
+        .upsert([{
+          id: userId,
+          email: formData.email,
+          full_name: formData.full_name,
+          role: 'admin'
+        }], { onConflict: 'id' });
+
+      if (userError) {
+        if (userError.code === '23503') {
+          throw new Error('هذا البريد الإلكتروني مسجل مسبقاً، يرجى تسجيل الدخول.');
+        }
+        if (userError.code !== '23505') {
+          throw userError;
+        }
       }
+
+      // 5. Create the store
+      const { data: storeData, error: storeError } = await supabase
+        .from('stores')
+        .insert([{
+          user_id: userId,
+          store_name: formData.store_name,
+          store_slug: formData.store_slug,
+          plan_id: 1 // Default free plan assuming ID 1 exists
+        }])
+        .select('id')
+        .single();
+
+      if (storeError) throw storeError;
+      
+      const storeId = storeData.id;
+
+      // 5. Create default appearance
+      await supabase
+        .from('appearance')
+        .insert([{
+          store_id: storeId,
+          store_title: formData.store_name,
+          primary_color: '#000000',
+          font_family: 'Cairo'
+        }]);
+
+      navigate('/admin/dashboard');
     } catch (err: any) {
+      console.error('Registration Error:', err);
       setError(err.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة لاحقاً.');
     } finally {
       setIsSubmitting(false);

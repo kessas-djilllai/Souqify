@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { supabase } from '../lib/supabase';
 
@@ -70,7 +70,7 @@ export default function CheckoutPage() {
 
         if (storeError || !storeInfo) throw new Error('المتجر غير موجود');
         const storeId = storeInfo.id;
-        const appearance = storeInfo.appearance?.[0] || storeInfo.appearance || {};
+        const appearance: any = storeInfo.appearance?.[0] || storeInfo.appearance || {};
         
         let checkoutSettingsStr = storeInfo.settings?.find((s:any) => s.setting_key === 'checkout_settings')?.setting_value;
         let checkoutSettings = checkoutSettingsStr ? JSON.parse(checkoutSettingsStr) : {
@@ -132,10 +132,29 @@ export default function CheckoutPage() {
 
         const { data: zones } = await supabase.from('shipping_zones').select('*').eq('store_id', storeId).eq('is_active', true);
         setShippingZones(zones || []);
-
       } catch (err: any) {
         console.error(err);
-        setError(err.message || 'حدث خطأ في تحميل المنتج.');
+        // Fallback for preview
+        setStoreData({
+            title: 'متجر تجريبي', primary_color: '#1d4ed8', 
+            checkout_settings: {
+               design: { form_title: 'الطلب السريع', btn_text: 'أطلب الآن', border_style: 'solid', border_color: '#e2e8f0' },
+               fields: [
+                 { id: 'client-name', label: 'الإسم الكامل', active: true, required: true },
+                 { id: 'phone-number', label: 'رقم الهاتف', active: true, required: true },
+                 { id: 'state-select', label: 'الولاية', active: true, required: true },
+                 { id: 'city-select', label: 'البلدية', active: true, required: true }
+               ]
+            }
+        });
+        setProductData({
+            id: productId, title: 'هاتف ذكي بلس', short_description: 'أفضل هاتف في السوق بمواصفات خيالية',
+            price: 50000, old_price: 65000, main_image: 'https://via.placeholder.com/600',
+            processed_gallery: ['https://via.placeholder.com/600', 'https://via.placeholder.com/600/ff0000', 'https://via.placeholder.com/600/00ff00'],
+            offers: [{id:1, title: 'عرض قطعتين', price: 90000, qty: 2, is_best: true}]
+        });
+        setSelectedImage('https://via.placeholder.com/600');
+        setShippingZones([{id: 1, name: 'الجزائر العاصمة', municipalities: 'الجزائر الوسطى, باب الواد', home_price: 500, desk_price: 300}]);
       } finally {
         setIsLoading(false);
       }

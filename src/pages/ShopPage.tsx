@@ -82,7 +82,7 @@ export default function ShopPage() {
         throw new Error('متجر غير موجود');
       }
 
-      const appearance = storeInfo.appearance?.[0] || storeInfo.appearance || {};
+      const appearance: any = storeInfo.appearance?.[0] || storeInfo.appearance || {};
       const storeId = storeInfo.id;
 
       if (categories.length === 0) {
@@ -120,7 +120,6 @@ export default function ShopPage() {
          images: images,
          main_logo: appearance.main_logo
       });
-
     } catch (err: any) {
       setError('فشل الاتصال بالخادم نهائياً.');
       console.error(err);

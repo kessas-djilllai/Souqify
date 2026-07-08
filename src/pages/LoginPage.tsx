@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { apiClient } from '../api/client';
+import { supabase } from '../lib/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,19 +21,18 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Assuming your backend login endpoint returns success and maybe a token
-      const response = await apiClient<any>('login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
       });
 
-      if (response.status === 'success') {
-        if (response.token) {
-          localStorage.setItem('auth_token', response.token);
-        }
+      if (error) {
+        setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+        return;
+      }
+
+      if (data.session) {
         navigate('/admin/dashboard');
-      } else {
-        setError(response.message || 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
       }
     } catch (err: any) {
       setError(err.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة لاحقاً.');

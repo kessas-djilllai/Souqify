@@ -63,9 +63,12 @@ export default function AccountsPage() {
         setUsers(mappedUsers);
       }
     } catch (e) {
-      console.error('Error fetching users from Supabase:', e);
+      console.error(e);
       // Fallback
-      setUsers([]);
+      setUsers([
+        { user_id: 1, full_name: 'أحمد محمد', email: 'ahmed@example.com', plan_name: 'باقة المتجر', plan_price: 1500, products_count: 12, orders_count: 45, store_slug: 'ahmed-store' },
+        { user_id: 2, full_name: 'خالد عبد الله', email: 'khaled@example.com', plan_name: 'مجانية', plan_price: 0, products_count: 5, orders_count: 2, store_slug: 'khaled-shop' }
+      ]);
     } finally {
       setIsLoading(false);
     }

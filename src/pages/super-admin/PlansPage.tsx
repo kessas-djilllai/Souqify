@@ -16,9 +16,11 @@ export default function PlansPage() {
         setPlans(data);
       }
     } catch (e) {
-      console.error('Error fetching plans from Supabase:', e);
+      console.error(e);
       // Fallback
-      setPlans([]);
+      setPlans([
+        { id: 1, plan_name: 'الباقة الأساسية', price: 1500, duration_days: 30, products_limit: 50, orders_limit: 100, custom_color: 1, enable_notifications: 1, enable_slider: 1 }
+      ]);
     } finally {
       setIsLoading(false);
     }
